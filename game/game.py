@@ -2,32 +2,59 @@ import math
 import os
 import random
 
-# Moving diagonally would be faster than moving straight,
-# so we multiply by this number to make it equal
+# Pa diagonāli kustoties spēlētājs būtu ātrāks nekā taisni,
+# tāpēc ātrumu reizinām ar šo skaitli (1 dalīts ar √2)
 DIAGONAL_SLOWDOWN = 0.7071
 
-# The main project folder (the one that holds game and client)
+# Galvenā projekta mape (tā, kurā atrodas game un client)
 PROJECT_FOLDER = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Small files where the game remembers things between runs
+# Faili, kuros spēle atceras datus starp palaišanas reizēm
 HIGH_SCORE_FILE = os.path.join(PROJECT_FOLDER, "highscore.txt")
 PLAYER_NAME_FILE = os.path.join(PROJECT_FOLDER, "player_name.txt")
 
 
+def is_close(first_x, first_y, second_x, second_y, touch_distance):
+    # Divi objekti pieskaras, ja to centri gan pa x, gan pa y ir pietiekami tuvu
+    if abs(first_x - second_x) > touch_distance:
+        return False
+    if abs(first_y - second_y) > touch_distance:
+        return False
+    return True
+
+
+def read_text_file(file_path):
+    # Nolasa teksta failu. Ja faila vēl nav, atgriež tukšu tekstu
+    try:
+        with open(file_path, "r", encoding="utf-8") as text_file:
+            return text_file.read().strip()
+    except (OSError, ValueError):
+        return ""
+
+
+def write_text_file(file_path, text):
+    # Ieraksta tekstu failā. Ja neizdodas, spēle vienkārši turpina darbu
+    try:
+        with open(file_path, "w", encoding="utf-8") as text_file:
+            text_file.write(text)
+    except OSError:
+        pass
+
+
 class Game:
     def __init__(self, screen_width, screen_height):
-        # Size of the whole screen (given by the client)
+        # Visa ekrāna izmērs (to iedod client)
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        # The bars at the top and bottom hold the information (health, score, ...)
-        # The game itself only happens in the play area between them
+        # Joslas augšā un apakšā rāda informāciju (veselība, rezultāts, ...)
+        # Pati spēle notiek tikai spēles laukumā starp tām
         self.top_bar_height = 64
         self.bottom_bar_height = 56
         self.play_area_top = self.top_bar_height
         self.play_area_bottom = self.screen_height - self.bottom_bar_height
 
-        # Screens
+        # Ekrāni
         self.state = "menu"  # "menu", "enter_name", "playing", "paused", "game_over"
         self.menu_options = ["Start", "Quit"]
         self.name_options = ["Start", "Back"]
@@ -36,141 +63,145 @@ class Game:
         self.hovered_option = None
         self.running = True
 
-        # The player's name (it is asked for before every game and shown on the website later)
+        # Spēlētāja vārds (to jautā pirms katras spēles, un vēlāk to rāda mājaslapā)
         self.max_name_length = 12
-        self.player_name = self.load_player_name()
+        self.player_name = read_text_file(PLAYER_NAME_FILE)[:self.max_name_length]
 
-        # The best score ever reached (it stays between rounds and is saved in a file)
-        self.high_score = self.load_high_score()
+        # Labākais rezultāts, kāds jebkad sasniegts (tas saglabājas failā)
+        saved_score = read_text_file(HIGH_SCORE_FILE)
+        if saved_score.isdigit():
+            self.high_score = int(saved_score)
+        else:
+            self.high_score = 0
 
-        # Starting values. Boosts change the current values during a round,
-        # and every new round starts again from these numbers
+        # Sākuma vērtības. Uzlabojumi maina pašreizējās vērtības raunda laikā,
+        # un katrs jauns raunds sākas no šiem skaitļiem
         self.start_max_health = 100
-        self.start_bullet_damage = 10  # 3 hits to kill a zombie with 30 health
-        self.start_shoot_delay = 13  # frames between two shots (60 frames = 1 second)
+        self.start_bullet_damage = 10  # 3 sitieni, lai nogalinātu zombiju ar 30 dzīvībām
+        self.start_shoot_delay = 13  # kadri starp diviem šāvieniem (60 kadri = 1 sekunde)
 
-        # Player settings
+        # Spēlētāja iestatījumi
         self.player_size = 30
         self.player_speed = 4
 
-        # Dash settings
-        self.dash_speed = 15  # pixels per frame while dashing
-        self.dash_time = 10  # frames the dash lasts (10 frames = about 150 pixels)
-        self.dash_cooldown_delay = 420  # frames until the dash is ready again (7 seconds)
+        # Izrāviena (dash) iestatījumi
+        self.dash_speed = 15  # pikseļi kadrā izrāviena laikā
+        self.dash_time = 10  # kadri, cik ilgi izrāviens ilgst (apmēram 150 pikseļi)
+        self.dash_cooldown_delay = 420  # kadri līdz nākamajam izrāvienam (7 sekundes)
 
-        # Shooting settings
+        # Šaušanas iestatījumi
         self.bullet_speed = 12
-        self.bullet_size = 5  # how close a bullet must get to a zombie to hit it
-        self.bullet_length = 14  # how long the tic-tac shape is
-        self.bullet_thickness = 5  # how wide the tic-tac shape is
-        self.shoot_pause_after_click = 15  # frames without shooting after clicking a button, so the click does not fire a bullet
+        self.bullet_size = 5  # cik tuvu zombijam jānonāk lodei, lai trāpītu
+        self.bullet_length = 14  # cik gara ir "tic-tac" formas lode
+        self.bullet_thickness = 5  # cik plata ir lode
+        self.shoot_pause_after_click = 15  # kadri bez šaušanas pēc pogas klikšķa
 
-        # Orb settings
+        # Orbu iestatījumi
         self.orb_radius = 10
-        self.orbs_needed = 10  # the player can hold 10 orbs at most
-        self.orb_spawn_delay = 180  # frames between two new orbs (3 seconds)
-        self.max_orbs_on_map = 5  # no new orbs appear while this many are lying around
-        self.orb_edge_margin = 40  # orbs do not appear closer than this to the edge of the play area
+        self.orbs_needed = 10  # spēlētājs var nēsāt ne vairāk kā 10 orbus
+        self.orb_spawn_delay = 180  # kadri starp diviem jauniem orbiem (3 sekundes)
+        self.max_orbs_on_map = 5  # kamēr uz kartes ir tik daudz, jauni neparādās
+        self.orb_edge_margin = 40  # orbi neparādās tuvāk laukuma malai par šo
 
-        # Boost settings (a boost lasts until the round ends)
+        # Uzlabojumu iestatījumi (uzlabojums ilgst līdz raunda beigām)
         self.boost_names = ["faster_shooting", "stronger_bullets", "more_health"]
-        self.boost_damage_amount = 5  # stronger bullets: 10 damage becomes 15, then 20, ...
-        self.boost_shoot_delay_amount = 3  # faster shooting: the delay gets 3 frames shorter (13, 10, 7, 4)
-        self.minimum_shoot_delay = 4  # the delay never gets shorter than this
-        self.boost_health_amount = 20  # more health: max health and current health go up by this
-        self.boost_message_delay = 120  # frames the boost message stays on the screen (2 seconds)
+        self.boost_damage_amount = 5  # stiprākas lodes: 10 kaitējums kļūst 15, tad 20, ...
+        self.boost_shoot_delay_amount = 3  # ātrāka šaušana: aizkave samazinās par 3 kadriem
+        self.minimum_shoot_delay = 4  # aizkave nekad nekļūst mazāka par šo
+        self.boost_health_amount = 20  # vairāk veselības: maksimums un pašreizējā veselība aug par šo
+        self.boost_message_delay = 120  # kadri, cik ilgi uzlabojuma ziņa ir redzama (2 sekundes)
 
-        # Grenade settings
-        self.grenade_speed = 18  # pixels per frame while it flies to the cursor
-        self.grenade_fuse_time = 30  # frames between landing and exploding (half a second)
-        self.grenade_radius = 130  # zombies inside this circle die
+        # Granātas iestatījumi
+        self.grenade_speed = 18  # pikseļi kadrā, kamēr tā lido uz kursoru
+        self.grenade_fuse_time = 30  # kadri no nolaišanās līdz sprādzienam (pussekunde)
+        self.grenade_radius = 130  # zombiji šajā aplī iet bojā
         self.grenade_size = 8
-        self.explosion_time = 20  # frames the explosion picture stays on the screen
+        self.explosion_time = 20  # kadri, cik ilgi sprādziena attēls ir redzams
 
-        # Zombie settings (these are the values for wave 1)
+        # Zombiju iestatījumi (šīs ir 1. viļņa vērtības)
         self.zombie_size = 30
-        self.zombie_health = 30  # 3 hits with 10 damage
+        self.zombie_health = 30  # 3 sitieni ar 10 kaitējumu
         self.zombie_speed = 1.7
-        self.zombie_damage = 10  # health the player loses when a zombie touches them
+        self.zombie_damage = 10  # cik veselības zaudē spēlētājs, kad zombijs pieskaras
 
-        # How zombies get stronger with every wave
-        self.extra_zombie_health = 10  # added every 3 waves
-        self.zombie_speed_increase = 0.1  # added every wave
-        self.zombie_max_speed = 3.2  # 3.2 * 1.2 = 3.84, still lower than player_speed
+        # Kā zombiji kļūst stiprāki ar katru vilni
+        self.extra_zombie_health = 10  # pieskaita ik pēc 3 viļņiem
+        self.zombie_speed_increase = 0.1  # pieskaita katrā vilnī
+        self.zombie_max_speed = 3.2  # 3.2 * 1.2 = 3.84, vēl joprojām lēnāk par spēlētāju
 
-        # How zombies spread out instead of forming one big group
-        self.zombie_slowest_factor = 0.8  # the slowest zombies walk at 80% of the wave speed
-        self.zombie_fastest_factor = 1.2  # the fastest zombies walk at 120% of the wave speed
-        self.zombie_flank_distance = 150  # far zombies aim for their own spot this far from the player
-        self.zombie_flank_spread = 0.6  # how far the spot can be from the zombie's own side (0.6 = about 35 degrees)
-        self.zombie_spacing = 40  # how close two zombies are allowed to get to each other
+        # Kā zombiji izklīst, nevis veido vienu lielu bariņu
+        self.zombie_slowest_factor = 0.8  # lēnākie iet ar 80% no viļņa ātruma
+        self.zombie_fastest_factor = 1.2  # ātrākie iet ar 120% no viļņa ātruma
+        self.zombie_flank_distance = 150  # tālie zombiji mērķē uz savu vietu šādā attālumā no spēlētāja
+        self.zombie_flank_spread = 0.6  # cik tālu vieta var būt no zombija puses (0.6 ≈ 35 grādi)
+        self.zombie_spacing = 40  # cik tuvu viens otram drīkst nonākt zombiji
 
-        # Wave settings
+        # Viļņu iestatījumi
         self.zombies_in_first_wave = 11
         self.extra_zombies_per_wave = 4
-        self.wave_spawn_time = 1000  # frames it takes to spawn a whole wave (about 17 seconds)
-        self.wave_break_delay = 180  # frames of pause between waves (3 seconds)
+        self.wave_spawn_time = 1000  # kadri, cik ilgi visi viļņa zombiji parādās (ap 17 sekundēm)
+        self.wave_break_delay = 180  # kadri pauzei starp viļņiem (3 sekundes)
 
-        # Score settings
+        # Punktu iestatījumi
         self.points_per_zombie = 10
         self.points_per_orb = 5
         self.points_per_wave = 100
 
-        # How long the player is safe after being hit (60 frames = 1 second)
+        # Cik ilgi spēlētājs ir drošībā pēc trāpījuma (60 kadri = 1 sekunde)
         self.hit_pause = 45
 
-        # Everything that changes during a round gets its starting value here
+        # Viss, kas mainās raunda laikā, saņem sākuma vērtību šeit
         self.reset_round()
 
-    # ---------- Starting a new round ----------
+    # ---------- Jauna raunda sākšana ----------
     def reset_round(self):
-        # Boosts (every round starts without boosts)
+        # Uzlabojumi (katrs raunds sākas bez uzlabojumiem)
         self.player_max_health = self.start_max_health
         self.bullet_damage = self.start_bullet_damage
         self.shoot_delay = self.start_shoot_delay
-        self.last_boost = None  # the name of the boost the player got last
-        self.boost_message_timer = 0  # above 0 while the boost message is on the screen
+        self.last_boost = None  # pēdējā saņemtā uzlabojuma nosaukums
+        self.boost_message_timer = 0  # virs 0, kamēr uzlabojuma ziņa ir redzama
 
-        # Player (player_x and player_y are the CENTER of the square)
+        # Spēlētājs (player_x un player_y ir kvadrāta CENTRS)
         self.player_x = self.screen_width / 2
         self.player_y = (self.play_area_top + self.play_area_bottom) / 2
         self.player_health = self.player_max_health
-        self.hit_timer = 0  # counts down to 0, the player is safe while it is above 0
+        self.hit_timer = 0  # skaita līdz 0, kamēr tas ir virs 0, spēlētājs ir drošībā
 
-        # Dash
-        self.dash_timer = 0  # above 0 while the player is dashing
-        self.dash_cooldown_timer = 0  # above 0 while the dash is recharging
+        # Izrāviens
+        self.dash_timer = 0  # virs 0, kamēr spēlētājs izdara izrāvienu
+        self.dash_cooldown_timer = 0  # virs 0, kamēr izrāviens atjaunojas
         self.dash_direction_x = 0
         self.dash_direction_y = 0
-        self.last_direction_x = 1  # the dash goes this way if the player has not moved yet
+        self.last_direction_x = 1  # izrāviens iet šajā virzienā, ja spēlētājs vēl nav kustējies
         self.last_direction_y = 0
 
-        # Shooting
-        self.bullets = []  # every bullet that is flying right now
-        self.shoot_timer = 0  # counts down to 0, then we can shoot again
+        # Šaušana
+        self.bullets = []  # visas lodes, kas pašlaik lido
+        self.shoot_timer = 0  # skaita līdz 0, tad atkal var šaut
 
-        # Grenades
-        self.grenades = []  # every grenade that is flying or waiting to explode
-        self.explosions = []  # every explosion that is still on the screen
+        # Granātas
+        self.grenades = []  # visas granātas, kas lido vai gaida sprādzienu
+        self.explosions = []  # visi sprādzieni, kas vēl ir uz ekrāna
 
-        # Orbs
-        self.orbs = []  # every orb lying on the map right now
-        self.orbs_collected = 0  # how many orbs the player holds (0 to 10)
+        # Orbi
+        self.orbs = []  # visi orbi, kas pašlaik guļ uz kartes
+        self.orbs_collected = 0  # cik orbus spēlētājs tur (no 0 līdz 10)
         self.orb_spawn_timer = 0
 
-        # Zombies
-        self.zombies = []  # every zombie on the map right now
+        # Zombiji
+        self.zombies = []  # visi zombiji uz kartes
         self.zombie_spawn_timer = 0
         self.current_zombie_health = self.zombie_health
         self.current_zombie_speed = self.zombie_speed
 
-        # Waves (the round starts with a short break, then wave 1 begins)
+        # Viļņi (raunds sākas ar īsu pauzi, tad sākas 1. vilnis)
         self.wave_number = 1
-        self.wave_break_timer = self.wave_break_delay  # while this is above 0, we are in a break
+        self.wave_break_timer = self.wave_break_delay  # kamēr tas ir virs 0, ir pauze
         self.zombies_left_to_spawn = 0
-        self.wave_spawn_delay = 60  # frames between two zombies of the same wave
+        self.wave_spawn_delay = 60  # kadri starp diviem viena viļņa zombijiem
 
-        # Score (we remember the old record, so we can tell at the end if it was beaten)
+        # Rezultāts (atceramies veco rekordu, lai beigās zinātu, vai tas pārspēts)
         self.score = 0
         self.record_at_round_start = self.high_score
 
@@ -180,11 +211,11 @@ class Game:
         self.shoot_timer = self.shoot_pause_after_click
         self.state = "playing"
 
-    # ---------- Esc key ----------
+    # ---------- Esc taustiņš ----------
     def press_escape(self):
-        # While playing, Esc pauses the game, and pressing it again continues
-        # On the name screen, Esc goes back to the menu
-        # (it does nothing in the menu or on the game over screen)
+        # Spēles laikā Esc pauzē spēli, un vēlreiz nospiests turpina to
+        # Vārda ekrānā Esc atgriež uz izvēlni
+        # (izvēlnē un game over ekrānā tas neko nedara)
         if self.state == "playing":
             self.state = "paused"
             self.hovered_option = None
@@ -199,14 +230,14 @@ class Game:
         self.hovered_option = None
         self.shoot_timer = self.shoot_pause_after_click
 
-    # ---------- Menu, name, pause and game over screens ----------
+    # ---------- Izvēlne, vārda, pauzes un game over ekrāni ----------
     def hover_option(self, option_number):
         self.hovered_option = option_number
 
     def click_option(self, option_number):
         if self.state == "menu":
             if self.menu_options[option_number] == "Start":
-                # Before the game starts, the player types a name
+                # Pirms spēles sākuma spēlētājs ievada vārdu
                 self.state = "enter_name"
                 self.hovered_option = None
             else:
@@ -232,89 +263,54 @@ class Game:
             else:
                 self.state = "menu"
 
-    # ---------- Player name ----------
+    # ---------- Spēlētāja vārds ----------
     def add_name_text(self, typed_text):
-        # typed_text is what the player just typed (usually one character)
+        # typed_text ir tas, ko spēlētājs tikko uzrakstīja (parasti viens burts)
         for character in typed_text:
-            # The name has a maximum length
+            # Vārdam ir maksimālais garums
             if len(self.player_name) >= self.max_name_length:
                 break
 
-            # Only letters, numbers, spaces and a few simple signs are allowed
+            # Atļauti tikai burti, cipari, atstarpe un dažas vienkāršas zīmes
             if not (character.isalnum() or character in " _-."):
                 continue
 
-            # A name can not start with a space
+            # Vārds nedrīkst sākties ar atstarpi
             if character == " " and len(self.player_name) == 0:
                 continue
 
             self.player_name = self.player_name + character
 
     def delete_name_character(self):
-        # Removes the last character (the Backspace key)
+        # Izdzēš pēdējo burtu (Backspace taustiņš)
         self.player_name = self.player_name[:-1]
 
     def confirm_name(self):
-        # Spaces at the end do not count as part of the name
+        # Atstarpes vārda beigās nav vārda daļa
         self.player_name = self.player_name.strip()
 
-        # An empty name is not allowed
+        # Tukšs vārds nav atļauts
         if self.player_name == "":
             return
 
-        self.save_player_name()
+        write_text_file(PLAYER_NAME_FILE, self.player_name)
         self.start_new_round()
 
-    def load_player_name(self):
-        # Reads the name the player used last time, so they do not have to type it again
-        # If the file does not exist yet, the name is empty
-        try:
-            with open(PLAYER_NAME_FILE, "r", encoding="utf-8") as name_file:
-                return name_file.read().strip()[:self.max_name_length]
-        except (OSError, ValueError):
-            return ""
-
-    def save_player_name(self):
-        # Writes the name to the file
-        # If saving does not work, the game just keeps going
-        try:
-            with open(PLAYER_NAME_FILE, "w", encoding="utf-8") as name_file:
-                name_file.write(self.player_name)
-        except OSError:
-            pass
-
-    # ---------- High score ----------
-    def load_high_score(self):
-        # Reads the saved best score from the file
-        # If the file does not exist yet (or is broken), the best score is 0
-        try:
-            with open(HIGH_SCORE_FILE, "r") as score_file:
-                return int(score_file.read().strip())
-        except (OSError, ValueError):
-            return 0
-
-    def save_high_score(self):
-        # Writes the best score to the file
-        # If saving does not work, the game just keeps going
-        try:
-            with open(HIGH_SCORE_FILE, "w") as score_file:
-                score_file.write(str(self.high_score))
-        except OSError:
-            pass
-
+    # ---------- Labākais rezultāts ----------
     def update_high_score(self):
-        # Whenever the score gets higher than the record, it becomes the new record
-        # We save right away, so the record is safe even if the game is closed
+        # Kad rezultāts pārsniedz rekordu, tas kļūst par jauno rekordu
+        # Saglabājam uzreiz, lai rekords nepazustu, ja spēli aizver pēkšņi
         if self.score > self.high_score:
             self.high_score = self.score
-            self.save_high_score()
+            write_text_file(HIGH_SCORE_FILE, str(self.high_score))
 
     def is_new_best(self):
-        # True if this round beat the record from before the round started
+        # Patiess, ja šajā raundā pārspēts rekords, kāds bija pirms raunda
         return self.score > self.record_at_round_start
 
-    # ---------- Update (runs once every frame while playing) ----------
+    # ---------- Atjaunināšana (darbojas katru kadru, kamēr notiek spēle) ----------
     def update_game(self):
+        # Visi atpakaļskaitīšanas taimeri katrā kadrā samazinās par 1, bet ne zem 0
         if self.shoot_timer > 0:
             self.shoot_timer = self.shoot_timer - 1
         if self.hit_timer > 0:
@@ -332,8 +328,8 @@ class Game:
         self.check_bullet_hits()
         self.check_zombie_hits_player()
 
-        # The player just died, so there is nothing more to update
-        # (the points from the last moment still count for the record)
+        # Spēlētājs tikko gāja bojā, tāpēc vairs nav ko atjaunināt
+        # (pēdējā brīža punkti rekordam joprojām skaitās)
         if self.state == "game_over":
             self.update_high_score()
             return
@@ -345,17 +341,17 @@ class Game:
         self.update_wave()
         self.update_high_score()
 
-    # ---------- Player ----------
+    # ---------- Spēlētājs ----------
     def move_player(self, direction_x, direction_y):
-        # direction_x and direction_y are -1, 0 or 1
-        # Example: direction_x = -1 means "go left"
+        # direction_x un direction_y ir -1, 0 vai 1
+        # Piemērs: direction_x = -1 nozīmē "iet pa kreisi"
 
-        # Remember where the player last walked, because the dash goes that way
+        # Atceramies, kurp spēlētājs gāja pēdējo reizi, jo izrāviens iet turp
         if direction_x != 0 or direction_y != 0:
             self.last_direction_x = direction_x
             self.last_direction_y = direction_y
 
-        # While dashing, the player flies in the dash direction and the keys do nothing
+        # Izrāviena laikā spēlētājs lido izrāviena virzienā, un taustiņi neko nedara
         if self.dash_timer > 0:
             self.player_x = self.player_x + self.dash_direction_x * self.dash_speed
             self.player_y = self.player_y + self.dash_direction_y * self.dash_speed
@@ -379,19 +375,19 @@ class Game:
         if self.player_x > self.screen_width - half_size:
             self.player_x = self.screen_width - half_size
 
-        # The top and bottom walls are the edges of the bars
+        # Augšējā un apakšējā siena ir joslu malas
         if self.player_y < self.play_area_top + half_size:
             self.player_y = self.play_area_top + half_size
         if self.player_y > self.play_area_bottom - half_size:
             self.player_y = self.play_area_bottom - half_size
 
     def start_dash(self):
-        # Can't dash while already dashing or while the dash is recharging
+        # Nevar izrauties, ja jau notiek izrāviens vai tas vēl atjaunojas
         if self.dash_timer > 0 or self.dash_cooldown_timer > 0:
             return
 
-        # Make the direction exactly 1 long (same trick as shooting),
-        # so the dash is equally long in every direction
+        # Virziena garumu pārvēršam par tieši 1 (tāpat kā šaujot),
+        # lai izrāviens visos virzienos būtu vienāds
         direction_length = math.hypot(self.last_direction_x, self.last_direction_y)
         self.dash_direction_x = self.last_direction_x / direction_length
         self.dash_direction_y = self.last_direction_y / direction_length
@@ -399,24 +395,24 @@ class Game:
         self.dash_timer = self.dash_time
         self.dash_cooldown_timer = self.dash_cooldown_delay
 
-    # ---------- Bullets ----------
+    # ---------- Lodes ----------
     def shoot(self, target_x, target_y):
-        # Still waiting for the delay to finish
+        # Vēl jāgaida, līdz aizkave beidzas
         if self.shoot_timer > 0:
             return
 
-        # How far is the target from the player?
+        # Cik tālu mērķis ir no spēlētāja?
         distance_x = target_x - self.player_x
         distance_y = target_y - self.player_y
         total_distance = math.hypot(distance_x, distance_y)
 
-        # The mouse is exactly on the player, so there is no direction
+        # Pele ir tieši uz spēlētāja, tāpēc nav virziena
         if total_distance == 0:
             return
 
-        # Dividing by the total distance makes the direction exactly 1 long,
-        # so bullets fly at the same speed in every direction
-        # A bullet's x and y are its FRONT. The long tail is drawn behind it
+        # Dalot ar kopējo attālumu, virziena garums kļūst tieši 1,
+        # tāpēc lodes visos virzienos lido ar vienādu ātrumu
+        # Lodes x un y ir tās PRIEKŠGALS, bet garā aste tiek zīmēta aiz tā
         bullet = {
             "x": self.player_x,
             "y": self.player_y,
@@ -433,7 +429,7 @@ class Game:
             bullet["x"] = bullet["x"] + bullet["direction_x"] * self.bullet_speed
             bullet["y"] = bullet["y"] + bullet["direction_y"] * self.bullet_speed
 
-            # Only keep the bullets that are still in the play area
+            # Paturam tikai lodes, kas vēl ir spēles laukumā
             if self.is_inside_play_area(bullet["x"], bullet["y"]):
                 bullets_still_flying.append(bullet)
 
@@ -446,9 +442,9 @@ class Game:
             return False
         return True
 
-    # ---------- Orbs ----------
+    # ---------- Orbi ----------
     def spawn_orbs_over_time(self):
-        # Enough orbs are lying around already, so wait
+        # Uz kartes jau guļ pietiekami daudz orbu, tāpēc gaidām
         if len(self.orbs) >= self.max_orbs_on_map:
             return
 
@@ -459,7 +455,7 @@ class Game:
             self.orb_spawn_timer = self.orb_spawn_delay
 
     def spawn_orb(self):
-        # A random spot in the play area, but not too close to the edge
+        # Nejauša vieta spēles laukumā, bet ne pārāk tuvu malai
         orb_x = random.randint(self.orb_edge_margin, self.screen_width - self.orb_edge_margin)
         orb_y = random.randint(
             self.play_area_top + self.orb_edge_margin,
@@ -469,23 +465,18 @@ class Game:
         orb = {"x": orb_x, "y": orb_y}
         self.orbs.append(orb)
 
-    def orb_touches_player(self, orb):
-        touch_distance = self.player_size / 2 + self.orb_radius
-
-        if abs(orb["x"] - self.player_x) > touch_distance:
-            return False
-        if abs(orb["y"] - self.player_y) > touch_distance:
-            return False
-        return True
-
     def collect_orbs(self):
+        touch_distance = self.player_size / 2 + self.orb_radius
         orbs_still_lying_around = []
 
         for orb in self.orbs:
-            # The player can only hold 10 orbs, so extra orbs stay on the map
+            # Spēlētājs var nēsāt tikai 10 orbus, tāpēc lieki orbi paliek uz kartes
             player_has_room = self.orbs_collected < self.orbs_needed
+            player_touches_orb = is_close(
+                orb["x"], orb["y"], self.player_x, self.player_y, touch_distance
+            )
 
-            if player_has_room and self.orb_touches_player(orb):
+            if player_has_room and player_touches_orb:
                 self.orbs_collected = self.orbs_collected + 1
                 self.score = self.score + self.points_per_orb
             else:
@@ -493,14 +484,14 @@ class Game:
 
         self.orbs = orbs_still_lying_around
 
-    # ---------- Boosts (E key) ----------
+    # ---------- Uzlabojumi (E taustiņš) ----------
     def use_boost(self):
-        # Only works when all 10 orbs are collected
+        # Darbojas tikai tad, kad savākti visi 10 orbi
         if self.orbs_collected < self.orbs_needed:
             return
 
-        # Make a list of the boosts that can still help
-        # Once shooting is as fast as it can get, that boost is left out
+        # Sastādām sarakstu ar uzlabojumiem, kas vēl var palīdzēt
+        # Kad šaušana jau ir pēc iespējas ātra, šo uzlabojumu izlaižam
         shooting_is_maxed = self.shoot_delay <= self.minimum_shoot_delay
 
         available_boosts = []
@@ -520,22 +511,22 @@ class Game:
             self.bullet_damage = self.bullet_damage + self.boost_damage_amount
 
         else:
-            # More health: the maximum goes up and the player is healed by the same amount
+            # Vairāk veselības: maksimums aug, un spēlētājs tiek dziedināts par tikpat
             self.player_max_health = self.player_max_health + self.boost_health_amount
             self.player_health = self.player_health + self.boost_health_amount
 
-        # The orbs are used up, and the client shows a message about the boost
+        # Orbi ir iztērēti, un client parāda ziņu par uzlabojumu
         self.orbs_collected = 0
         self.last_boost = boost_name
         self.boost_message_timer = self.boost_message_delay
 
-    # ---------- Grenades (F key) ----------
+    # ---------- Granātas (F taustiņš) ----------
     def throw_grenade(self, target_x, target_y):
-        # Only works when all 10 orbs are collected
+        # Darbojas tikai tad, kad savākti visi 10 orbi
         if self.orbs_collected < self.orbs_needed:
             return
 
-        # The grenade can only land in the play area, not on the bars
+        # Granāta var nokrist tikai spēles laukumā, nevis uz joslām
         if target_y < self.play_area_top:
             target_y = self.play_area_top
         if target_y > self.play_area_bottom:
@@ -573,7 +564,7 @@ class Game:
         distance_y = grenade["target_y"] - grenade["y"]
         total_distance = math.hypot(distance_x, distance_y)
 
-        # Close enough to the target, so the grenade lands there
+        # Pietiekami tuvu mērķim, tāpēc granāta nolaižas tur
         if total_distance <= self.grenade_speed:
             grenade["x"] = grenade["target_x"]
             grenade["y"] = grenade["target_y"]
@@ -584,7 +575,7 @@ class Game:
         grenade["y"] = grenade["y"] + distance_y / total_distance * self.grenade_speed
 
     def explode_grenade(self, grenade):
-        # Every zombie inside the circle dies, and we get points for each one
+        # Katrs zombijs aplī iet bojā, un par katru saņemam punktus
         zombies_still_alive = []
 
         for zombie in self.zombies:
@@ -597,7 +588,7 @@ class Game:
 
         self.zombies = zombies_still_alive
 
-        # The client draws a short explosion picture here
+        # Šeit client uzzīmē īsu sprādziena attēlu
         explosion = {"x": grenade["x"], "y": grenade["y"], "timer": self.explosion_time}
         self.explosions.append(explosion)
 
@@ -611,9 +602,9 @@ class Game:
 
         self.explosions = explosions_still_visible
 
-    # ---------- Waves ----------
+    # ---------- Viļņi ----------
     def update_wave(self):
-        # During the break we only count down, and then the next wave starts
+        # Pauzes laikā tikai skaitām atpakaļ, un tad sākas nākamais vilnis
         if self.wave_break_timer > 0:
             self.wave_break_timer = self.wave_break_timer - 1
             if self.wave_break_timer == 0:
@@ -622,24 +613,24 @@ class Game:
 
         self.spawn_zombies_over_time()
 
-        # The wave is over when nothing is left to spawn and every zombie is dead
+        # Vilnis ir beidzies, kad nav ko vairs izlaist un visi zombiji ir miruši
         if self.zombies_left_to_spawn == 0 and len(self.zombies) == 0:
             self.finish_wave()
 
     def start_wave(self):
-        # More zombies in every wave
+        # Katrā vilnī ir vairāk zombiju
         zombie_count = self.zombies_in_first_wave + (self.wave_number - 1) * self.extra_zombies_per_wave
         self.zombies_left_to_spawn = zombie_count
 
-        # Spread the zombies over the spawn time (but never faster than one every 10 frames)
+        # Izkliedējam zombijus pa visu parādīšanās laiku (bet ne ātrāk kā vienu ik pēc 10 kadriem)
         self.wave_spawn_delay = max(10, self.wave_spawn_time // zombie_count)
-        self.zombie_spawn_timer = 0  # the first zombie comes right away
+        self.zombie_spawn_timer = 0  # pirmais zombijs parādās uzreiz
 
-        # Tougher zombies: +health every 3 waves (// throws away the decimals)
+        # Izturīgāki zombiji: +dzīvības ik pēc 3 viļņiem (// atmet daļskaitli)
         waves_with_extra_health = (self.wave_number - 1) // 3
         self.current_zombie_health = self.zombie_health + self.extra_zombie_health * waves_with_extra_health
 
-        # Faster zombies: +speed every wave, up to the maximum
+        # Ātrāki zombiji: +ātrums katrā vilnī, līdz maksimumam
         faster_speed = self.zombie_speed + self.zombie_speed_increase * (self.wave_number - 1)
         self.current_zombie_speed = min(faster_speed, self.zombie_max_speed)
 
@@ -648,7 +639,7 @@ class Game:
         self.wave_number = self.wave_number + 1
         self.wave_break_timer = self.wave_break_delay
 
-    # ---------- Zombies ----------
+    # ---------- Zombiji ----------
     def spawn_zombies_over_time(self):
         if self.zombies_left_to_spawn <= 0:
             return
@@ -661,8 +652,8 @@ class Game:
             self.zombie_spawn_timer = self.wave_spawn_delay
 
     def spawn_zombie(self):
-        # Zombies appear just outside the play area, on a random side
-        # (at the top and bottom that is behind the bars, so you can not see them appear)
+        # Zombiji parādās tieši aiz spēles laukuma malas, nejaušā pusē
+        # (augšā un apakšā tas ir aiz joslām, tāpēc parādīšanos neredz)
         margin = 40
         side = random.choice(["top", "bottom", "left", "right"])
 
@@ -679,12 +670,12 @@ class Game:
             spawn_x = self.screen_width + margin
             spawn_y = random.randint(self.play_area_top, self.play_area_bottom)
 
-        # Every zombie gets its own speed, so they do not all arrive together
+        # Katrs zombijs saņem savu ātrumu, lai tie nepienāktu visi reizē
         speed_factor = random.uniform(self.zombie_slowest_factor, self.zombie_fastest_factor)
 
-        # Every zombie also gets its own spot around the player.
-        # The spot is on the same side the zombie comes from, with a small random spread,
-        # so the zombies walk roughly straight at the player and do not wander around
+        # Katrs zombijs saņem arī savu vietu ap spēlētāju. Vieta ir tajā pašā pusē,
+        # no kuras zombijs nāk, ar nelielu nejaušu novirzi, tāpēc zombiji iet
+        # aptuveni taisni uz spēlētāju un nevazājas apkārt
         angle_to_zombie = math.atan2(spawn_y - self.player_y, spawn_x - self.player_x)
         flank_angle = angle_to_zombie + random.uniform(-self.zombie_flank_spread, self.zombie_flank_spread)
 
@@ -702,8 +693,8 @@ class Game:
         for zombie in self.zombies:
             distance_to_player = math.hypot(self.player_x - zombie["x"], self.player_y - zombie["y"])
 
-            # Far away: walk to this zombie's own spot next to the player
-            # Close by: walk straight at the player
+            # Tālu: iet uz šī zombija savu vietu blakus spēlētājam
+            # Tuvu: iet taisni uz spēlētāju
             if distance_to_player > self.zombie_flank_distance:
                 target_x = self.player_x + zombie["flank_x"]
                 target_y = self.player_y + zombie["flank_y"]
@@ -711,12 +702,12 @@ class Game:
                 target_x = self.player_x
                 target_y = self.player_y
 
-            # Same idea as shooting: find the direction to the target
+            # Tā pati ideja kā šaujot: atrodam virzienu uz mērķi
             distance_x = target_x - zombie["x"]
             distance_y = target_y - zombie["y"]
             total_distance = math.hypot(distance_x, distance_y)
 
-            # The zombie is exactly on its target, so there is nowhere to walk
+            # Zombijs ir tieši uz sava mērķa, tāpēc nav kur iet
             if total_distance == 0:
                 continue
 
@@ -724,8 +715,8 @@ class Game:
             zombie["y"] = zombie["y"] + distance_y / total_distance * zombie["speed"]
 
     def push_zombies_apart(self):
-        # Every pair of zombies that is too close pushes each other away,
-        # so they do not stack on top of each other
+        # Katrs zombiju pāris, kas ir par tuvu, atgrūž viens otru,
+        # lai zombiji neuzkrātos viens uz otra
         minimum_distance = self.zombie_spacing
 
         for first_number in range(len(self.zombies)):
@@ -737,18 +728,18 @@ class Game:
                 distance_y = second_zombie["y"] - first_zombie["y"]
                 total_distance = math.hypot(distance_x, distance_y)
 
-                # These two are far enough apart
+                # Šie divi ir pietiekami tālu viens no otra
                 if total_distance >= minimum_distance:
                     continue
 
-                # They are on exactly the same spot, so push them in a random direction
+                # Tie ir tieši vienā vietā, tāpēc atgrūžam tos nejaušā virzienā
                 if total_distance == 0:
                     angle = random.uniform(0, 2 * math.pi)
                     distance_x = math.cos(angle)
                     distance_y = math.sin(angle)
                     total_distance = 1
 
-                # Each zombie moves away by half of the overlap
+                # Katrs zombijs atkāpjas par pusi no pārklāšanās
                 overlap = minimum_distance - total_distance
                 push_x = distance_x / total_distance * overlap / 2
                 push_y = distance_y / total_distance * overlap / 2
@@ -758,37 +749,29 @@ class Game:
                 second_zombie["x"] = second_zombie["x"] + push_x
                 second_zombie["y"] = second_zombie["y"] + push_y
 
-    # ---------- Bullets hitting zombies ----------
-    def bullet_touches_zombie(self, bullet, zombie):
-        # The zombie is a square, so the bullet touches it when it is close enough
-        # on both the x side and the y side
+    # ---------- Lodes trāpa zombijiem ----------
+    def check_bullet_hits(self):
+        # Zombijs ir kvadrāts, tāpēc lode tam pieskaras, kad ir pietiekami tuvu
         touch_distance = self.zombie_size / 2 + self.bullet_size
 
-        if abs(bullet["x"] - zombie["x"]) > touch_distance:
-            return False
-        if abs(bullet["y"] - zombie["y"]) > touch_distance:
-            return False
-        return True
-
-    def check_bullet_hits(self):
-        # Step 1: every bullet that touches a zombie damages it and disappears
+        # 1. solis: katra lode, kas pieskaras zombijam, to ievaino un pazūd
         bullets_that_missed = []
 
         for bullet in self.bullets:
             bullet_hit_a_zombie = False
 
             for zombie in self.zombies:
-                if self.bullet_touches_zombie(bullet, zombie):
+                if is_close(bullet["x"], bullet["y"], zombie["x"], zombie["y"], touch_distance):
                     zombie["health"] = zombie["health"] - self.bullet_damage
                     bullet_hit_a_zombie = True
-                    break  # one bullet can only hit one zombie
+                    break  # viena lode var trāpīt tikai vienam zombijam
 
             if not bullet_hit_a_zombie:
                 bullets_that_missed.append(bullet)
 
         self.bullets = bullets_that_missed
 
-        # Step 2: zombies with no health left die, and we get points for each
+        # 2. solis: zombiji bez dzīvībām iet bojā, un par katru saņemam punktus
         zombies_still_alive = []
 
         for zombie in self.zombies:
@@ -799,32 +782,24 @@ class Game:
 
         self.zombies = zombies_still_alive
 
-    # ---------- Zombies hitting the player ----------
-    def zombie_touches_player(self, zombie):
-        # Both are squares, so they touch when they are close enough
-        # on both the x side and the y side
-        touch_distance = (self.player_size + self.zombie_size) / 2
-
-        if abs(zombie["x"] - self.player_x) > touch_distance:
-            return False
-        if abs(zombie["y"] - self.player_y) > touch_distance:
-            return False
-        return True
-
+    # ---------- Zombiji trāpa spēlētājam ----------
     def check_zombie_hits_player(self):
-        # The player is safe while the pause after the last hit is still running
+        # Spēlētājs ir drošībā, kamēr turpinās pauze pēc pēdējā trāpījuma
         if self.hit_timer > 0:
             return
 
-        # The player is also safe while dashing
+        # Spēlētājs ir drošībā arī izrāviena laikā
         if self.dash_timer > 0:
             return
 
+        # Abi ir kvadrāti, tāpēc tie pieskaras, kad ir pietiekami tuvu
+        touch_distance = (self.player_size + self.zombie_size) / 2
+
         for zombie in self.zombies:
-            if self.zombie_touches_player(zombie):
+            if is_close(zombie["x"], zombie["y"], self.player_x, self.player_y, touch_distance):
                 self.player_health = self.player_health - self.zombie_damage
                 self.hit_timer = self.hit_pause
-                break  # only one hit at a time, even if several zombies touch
+                break  # vienlaikus tikai viens trāpījums, pat ja pieskaras vairāki zombiji
 
         if self.player_health <= 0:
             self.player_health = 0

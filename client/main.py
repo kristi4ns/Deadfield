@@ -1,71 +1,75 @@
 import math
 
 import pygame
+
+from client import score_sender
 from game.game import Game
 
 pygame.init()
 
-# The game always uses a 1280x720 (16:9) screen
-screen_width = 1280
-screen_height = 720
+# Spēle vienmēr izmanto 1280x720 (16:9) ekrānu
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+CENTER_X = SCREEN_WIDTH / 2
+CENTER_Y = SCREEN_HEIGHT / 2
 
-# SCALED stretches the picture to fit the window and keeps the 16:9 shape
-# RESIZABLE lets you drag the window edges or use the green fullscreen button
-display_flags = pygame.SCALED | pygame.RESIZABLE
-screen = pygame.display.set_mode((screen_width, screen_height), display_flags)
+# SCALED pielāgo attēlu loga izmēram un saglabā 16:9 formu
+# RESIZABLE ļauj mainīt loga izmēru vai lietot zaļo pilnekrāna pogu
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SCALED | pygame.RESIZABLE)
 
-# This lets pygame receive typed text (needed for typing the name)
+# Šis ļauj pygame saņemt rakstīto tekstu (vajadzīgs vārda ievadei)
 pygame.key.start_text_input()
 
-game = Game(screen_width, screen_height)
+game = Game(SCREEN_WIDTH, SCREEN_HEIGHT)
 pygame.display.set_caption("Deadfield")
 clock = pygame.time.Clock()
 
 
 def make_font(size):
-    # pygame uses the first font from this list that your computer has
+    # pygame izmanto pirmo fontu no saraksta, kas ir šajā datorā
     return pygame.font.SysFont("helveticaneue,avenir,segoeui,arial", size)
 
 
-title_font = make_font(100)
-wave_font = make_font(72)
-menu_font = make_font(36)
-value_font = make_font(30)
-label_font = make_font(17)
+TITLE_FONT = make_font(100)
+WAVE_FONT = make_font(72)
+MENU_FONT = make_font(36)
+VALUE_FONT = make_font(30)
+LABEL_FONT = make_font(17)
 
-button_width = 220
-button_height = 60
-button_x = game.screen_width / 2 - button_width / 2
+BUTTON_WIDTH = 220
+BUTTON_HEIGHT = 60
+BUTTON_X = CENTER_X - BUTTON_WIDTH / 2
 
-# Colors
-ground_color = (48, 68, 54)
-panel_color = (18, 22, 24)
-panel_line_color = (46, 54, 56)
-bright_text_color = (232, 236, 236)
-dim_text_color = (125, 138, 140)
-bar_empty_color = (38, 45, 47)
-health_good_color = (120, 220, 130)
-health_medium_color = (240, 190, 60)
-health_low_color = (230, 75, 65)
-dash_ready_color = (110, 200, 255)
-dash_charging_color = (60, 105, 135)
-orb_color = (170, 90, 255)
-orb_halo_color = (95, 55, 140)
-orb_full_color = (255, 200, 0)  # all 10 circles turn gold when you hold 10 orbs
-bullet_color = (205, 210, 220)
-zombie_color = (205, 60, 60)
-player_color = (70, 140, 240)
-player_dash_color = (170, 235, 255)
-grenade_color = (90, 96, 102)
-grenade_warning_color = (230, 75, 65)
-explosion_color = (255, 170, 60)
+# Krāsas
+GROUND_COLOR = (48, 68, 54)
+PANEL_COLOR = (18, 22, 24)
+PANEL_LINE_COLOR = (46, 54, 56)
+BRIGHT_TEXT_COLOR = (232, 236, 236)
+DIM_TEXT_COLOR = (125, 138, 140)
+BAR_EMPTY_COLOR = (38, 45, 47)
+HEALTH_GOOD_COLOR = (120, 220, 130)
+HEALTH_MEDIUM_COLOR = (240, 190, 60)
+HEALTH_LOW_COLOR = (230, 75, 65)
+DASH_READY_COLOR = (110, 200, 255)
+DASH_CHARGING_COLOR = (60, 105, 135)
+ORB_COLOR = (170, 90, 255)
+ORB_HALO_COLOR = (95, 55, 140)
+ORB_FULL_COLOR = (255, 200, 0)  # visi 10 apļi kļūst zeltaini, kad tur 10 orbus
+BULLET_COLOR = (205, 210, 220)
+ZOMBIE_COLOR = (205, 60, 60)
+PLAYER_COLOR = (70, 140, 240)
+PLAYER_DASH_COLOR = (170, 235, 255)
+GRENADE_COLOR = (90, 96, 102)
+GRENADE_WARNING_COLOR = (230, 75, 65)
+EXPLOSION_COLOR = (255, 170, 60)
+CROSSHAIR_COLOR = (255, 255, 255)
 
-# A dark see-through layer that is drawn over the frozen game (pause and game over screens)
-dark_layer = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
-dark_layer.fill((0, 0, 0, 170))
+# Tumšs caurspīdīgs slānis, ko uzliek virs sastingušās spēles (pauzes un game over ekrānos)
+DARK_LAYER = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+DARK_LAYER.fill((0, 0, 0, 170))
 
-# The text shown on the screen for each boost
-boost_texts = {
+# Teksts, ko rāda ekrānā katram uzlabojumam
+BOOST_TEXTS = {
     "faster_shooting": "FASTER SHOOTING",
     "stronger_bullets": "STRONGER BULLETS",
     "more_health": "MORE HEALTH",
@@ -73,42 +77,43 @@ boost_texts = {
 
 
 def make_bullet_picture():
-    # Draw the tic-tac 6 times bigger first, then shrink it smoothly,
-    # so the edges are clean and not jagged
+    # Vispirms uzzīmējam lodi 6 reizes lielāku un tad gludi samazinām,
+    # lai malas būtu tīras un nav robainas
     scale = 6
     big_length = game.bullet_length * scale
     big_thickness = game.bullet_thickness * scale
 
     big_picture = pygame.Surface((big_length, big_thickness), pygame.SRCALPHA)
     big_rectangle = pygame.Rect(0, 0, big_length, big_thickness)
-    pygame.draw.rect(big_picture, bullet_color, big_rectangle, border_radius=big_thickness // 2)
+    pygame.draw.rect(big_picture, BULLET_COLOR, big_rectangle, border_radius=big_thickness // 2)
 
     return pygame.transform.smoothscale(big_picture, (game.bullet_length, game.bullet_thickness))
 
 
-# The tic-tac picture is made once here and pointing to the right
-# Every bullet then gets a turned copy of it
-bullet_picture = make_bullet_picture()
+# "Tic-tac" attēls tiek izveidots vienreiz, un tas ir vērsts pa labi
+# Katra lode pēc tam saņem tā pagrieztu kopiju
+BULLET_PICTURE = make_bullet_picture()
 
 
 def make_buttons(option_count, first_button_y):
-    # One rectangle (button) for each option, one below the other
+    # Katrai izvēlei viens taisnstūris (poga), vienu zem otras
     buttons = []
     for option_number in range(option_count):
         button_y = first_button_y + option_number * 80
-        button_rectangle = pygame.Rect(button_x, button_y, button_width, button_height)
+        button_rectangle = pygame.Rect(BUTTON_X, button_y, BUTTON_WIDTH, BUTTON_HEIGHT)
         buttons.append(button_rectangle)
     return buttons
 
 
-menu_buttons = make_buttons(len(game.menu_options), game.screen_height / 2 - 70)
-name_buttons = make_buttons(len(game.name_options), game.screen_height / 2 + 60)
-pause_buttons = make_buttons(len(game.pause_options), game.screen_height / 2 - 70)
-game_over_buttons = make_buttons(len(game.game_over_options), game.screen_height / 2)
+MENU_BUTTONS = make_buttons(len(game.menu_options), CENTER_Y - 70)
+NAME_BUTTONS = make_buttons(len(game.name_options), CENTER_Y + 60)
+PAUSE_BUTTONS = make_buttons(len(game.pause_options), CENTER_Y - 70)
+GAME_OVER_BUTTONS = make_buttons(len(game.game_over_options), CENTER_Y)
 
 
+# ---------- Zīmēšanas palīgfunkcijas ----------
 def draw_text(surface, text, font, color, x, y, align="center"):
-    # Draws text so that (x, y) is its left, center or right side
+    # Uzzīmē tekstu tā, ka (x, y) ir tā kreisā, centra vai labā puse
     text_image = font.render(text, True, color)
     text_rectangle = text_image.get_rect()
 
@@ -123,10 +128,10 @@ def draw_text(surface, text, font, color, x, y, align="center"):
 
 
 def draw_bar(surface, x, y, width, height, fraction, fill_color):
-    # A slim rounded bar: a dark box with a colored part on top that gets shorter
-    # fraction is a number from 0 (empty) to 1 (full)
+    # Tieva noapaļota josla: tumša kaste ar krāsainu daļu virsū, kas kļūst īsāka
+    # fraction ir skaitlis no 0 (tukša) līdz 1 (pilna)
     bar_box = pygame.Rect(x, y, width, height)
-    pygame.draw.rect(surface, bar_empty_color, bar_box, border_radius=height // 2)
+    pygame.draw.rect(surface, BAR_EMPTY_COLOR, bar_box, border_radius=height // 2)
 
     fill_width = int(width * fraction)
     if fill_width > 0:
@@ -134,43 +139,42 @@ def draw_bar(surface, x, y, width, height, fraction, fill_color):
         pygame.draw.rect(surface, fill_color, fill_box, border_radius=height // 2)
 
 
-def draw_buttons(surface, options, buttons, hover_color=bright_text_color, hover_text_color=panel_color):
+def draw_buttons(surface, options, buttons, hover_color=BRIGHT_TEXT_COLOR, hover_text_color=PANEL_COLOR):
     for option_number in range(len(options)):
         if option_number == game.hovered_option:
             button_color = hover_color
             text_color = hover_text_color
         else:
-            button_color = bar_empty_color
-            text_color = bright_text_color
+            button_color = BAR_EMPTY_COLOR
+            text_color = BRIGHT_TEXT_COLOR
 
         button_rectangle = buttons[option_number]
         pygame.draw.rect(surface, button_color, button_rectangle, border_radius=10)
-        draw_text(surface, options[option_number], menu_font, text_color,
+        draw_text(surface, options[option_number], MENU_FONT, text_color,
                   button_rectangle.centerx, button_rectangle.centery)
 
 
 def draw_crosshair(surface, center_x, center_y):
-    crosshair_color = (255, 255, 255)
+    # Aplis ar mazu punktu vidū
+    pygame.draw.circle(surface, CROSSHAIR_COLOR, (center_x, center_y), 12, 2)
+    pygame.draw.circle(surface, CROSSHAIR_COLOR, (center_x, center_y), 2)
 
-    # A circle with a small dot in the middle
-    pygame.draw.circle(surface, crosshair_color, (center_x, center_y), 12, 2)
-    pygame.draw.circle(surface, crosshair_color, (center_x, center_y), 2)
-
-    # Four short lines pointing at the center
-    pygame.draw.line(surface, crosshair_color, (center_x - 20, center_y), (center_x - 8, center_y), 2)
-    pygame.draw.line(surface, crosshair_color, (center_x + 8, center_y), (center_x + 20, center_y), 2)
-    pygame.draw.line(surface, crosshair_color, (center_x, center_y - 20), (center_x, center_y - 8), 2)
-    pygame.draw.line(surface, crosshair_color, (center_x, center_y + 8), (center_x, center_y + 20), 2)
+    # Četras īsas līnijas, kas vērstas uz centru
+    pygame.draw.line(surface, CROSSHAIR_COLOR, (center_x - 20, center_y), (center_x - 8, center_y), 2)
+    pygame.draw.line(surface, CROSSHAIR_COLOR, (center_x + 8, center_y), (center_x + 20, center_y), 2)
+    pygame.draw.line(surface, CROSSHAIR_COLOR, (center_x, center_y - 20), (center_x, center_y - 8), 2)
+    pygame.draw.line(surface, CROSSHAIR_COLOR, (center_x, center_y + 8), (center_x, center_y + 20), 2)
 
 
+# ---------- Spēles pasaules zīmēšana ----------
 def draw_bullets(surface):
     for bullet in game.bullets:
-        # The picture points to the right, so turn it the way the bullet flies
-        # (pygame turns counter-clockwise, but the screen's y goes down, so the angle is flipped)
+        # Attēls ir vērsts pa labi, tāpēc pagriežam to lodes lidojuma virzienā
+        # (pygame griež pretēji pulksteņrādītājam, bet ekrāna y iet uz leju, tāpēc leņķi apgriežam)
         angle = -math.degrees(math.atan2(bullet["direction_y"], bullet["direction_x"]))
-        turned_picture = pygame.transform.rotozoom(bullet_picture, angle, 1)
+        turned_picture = pygame.transform.rotozoom(BULLET_PICTURE, angle, 1)
 
-        # The bullet's x and y are its front, so the middle of the tic-tac is half a length behind it
+        # Lodes x un y ir tās priekšgals, tāpēc attēla vidus ir pusgarumu aiz tā
         middle_x = bullet["x"] - bullet["direction_x"] * game.bullet_length / 2
         middle_y = bullet["y"] - bullet["direction_y"] * game.bullet_length / 2
 
@@ -182,32 +186,32 @@ def draw_grenades(surface):
     for grenade in game.grenades:
         grenade_position = (int(grenade["x"]), int(grenade["y"]))
 
-        # Once it has landed, a ring shows how far the explosion will reach
+        # Kad granāta ir nolaidusies, gredzens parāda, cik tālu sniegsies sprādziens
         if grenade["landed"]:
-            pygame.draw.circle(surface, grenade_warning_color, grenade_position, game.grenade_radius, 2)
+            pygame.draw.circle(surface, GRENADE_WARNING_COLOR, grenade_position, game.grenade_radius, 2)
 
-        # After landing the grenade blinks red until it explodes
-        grenade_is_red = grenade["landed"] and (grenade["fuse_timer"] // 4) % 2 == 0
-        if grenade_is_red:
-            current_grenade_color = grenade_warning_color
+        # Pēc nolaišanās granāta mirgo sarkana līdz sprādzienam
+        is_blinking_red = grenade["landed"] and (grenade["fuse_timer"] // 4) % 2 == 0
+        if is_blinking_red:
+            current_color = GRENADE_WARNING_COLOR
         else:
-            current_grenade_color = grenade_color
+            current_color = GRENADE_COLOR
 
-        pygame.draw.circle(surface, current_grenade_color, grenade_position, game.grenade_size)
-        pygame.draw.circle(surface, bright_text_color, grenade_position, game.grenade_size, 2)
+        pygame.draw.circle(surface, current_color, grenade_position, game.grenade_size)
+        pygame.draw.circle(surface, BRIGHT_TEXT_COLOR, grenade_position, game.grenade_size, 2)
 
 
 def draw_explosions(surface):
     for explosion in game.explosions:
-        # The explosion fades out: fraction goes from 1 (new) to 0 (gone)
+        # Sprādziens izzūd: fraction iet no 1 (jauns) līdz 0 (pazudis)
         fraction = explosion["timer"] / game.explosion_time
         alpha = int(190 * fraction)
 
-        # A see-through circle needs its own small picture
+        # Caurspīdīgam aplim vajag savu mazo attēlu
         picture_size = game.grenade_radius * 2
         explosion_picture = pygame.Surface((picture_size, picture_size), pygame.SRCALPHA)
         circle_center = (game.grenade_radius, game.grenade_radius)
-        pygame.draw.circle(explosion_picture, (*explosion_color, alpha), circle_center, game.grenade_radius)
+        pygame.draw.circle(explosion_picture, (*EXPLOSION_COLOR, alpha), circle_center, game.grenade_radius)
 
         picture_x = int(explosion["x"]) - game.grenade_radius
         picture_y = int(explosion["y"]) - game.grenade_radius
@@ -215,52 +219,50 @@ def draw_explosions(surface):
 
 
 def draw_game_world(surface):
-    # Orbs (drawn first, so everything else is on top of them)
+    # Orbi (zīmē pirmos, lai viss pārējais ir virs tiem)
     for orb in game.orbs:
         orb_position = (int(orb["x"]), int(orb["y"]))
-        pygame.draw.circle(surface, orb_halo_color, orb_position, game.orb_radius + 5)
-        pygame.draw.circle(surface, orb_color, orb_position, game.orb_radius)
+        pygame.draw.circle(surface, ORB_HALO_COLOR, orb_position, game.orb_radius + 5)
+        pygame.draw.circle(surface, ORB_COLOR, orb_position, game.orb_radius)
         pygame.draw.circle(surface, (240, 225, 255), orb_position, 3)
 
-    # Grenades
     draw_grenades(surface)
-
-    # Bullets
     draw_bullets(surface)
 
-    # Zombies
+    # Zombiji
     for zombie in game.zombies:
         zombie_rectangle = pygame.Rect(0, 0, game.zombie_size, game.zombie_size)
         zombie_rectangle.center = (zombie["x"], zombie["y"])
-        pygame.draw.rect(surface, zombie_color, zombie_rectangle)
+        pygame.draw.rect(surface, ZOMBIE_COLOR, zombie_rectangle)
 
-    # Explosions (on top of the zombies)
+    # Sprādzieni (virs zombijiem)
     draw_explosions(surface)
 
-    # Player (it blinks while the pause after a hit is running)
+    # Spēlētājs (mirgo, kamēr turpinās pauze pēc trāpījuma)
     player_is_hidden = (game.hit_timer // 5) % 2 == 1
     if not player_is_hidden:
-        # The player turns light blue while dashing
+        # Izrāviena laikā spēlētājs kļūst gaiši zils
         if game.dash_timer > 0:
-            current_player_color = player_dash_color
+            current_color = PLAYER_DASH_COLOR
         else:
-            current_player_color = player_color
+            current_color = PLAYER_COLOR
 
         player_rectangle = pygame.Rect(0, 0, game.player_size, game.player_size)
         player_rectangle.center = (game.player_x, game.player_y)
-        pygame.draw.rect(surface, current_player_color, player_rectangle)
+        pygame.draw.rect(surface, current_color, player_rectangle)
 
 
+# ---------- Joslu zīmēšana ----------
 def draw_orb_circles(surface, first_circle_x, circle_y):
-    # 10 small circles in a row: one lights up for every orb you hold
+    # 10 mazi apļi rindā: par katru orbu iedegas viens
     circle_radius = 7
     circle_spacing = 20
 
-    # When you hold all 10 orbs, every circle turns gold
+    # Kad tur visus 10 orbus, visi apļi kļūst zeltaini
     if game.orbs_collected >= game.orbs_needed:
-        lit_color = orb_full_color
+        lit_color = ORB_FULL_COLOR
     else:
-        lit_color = orb_color
+        lit_color = ORB_COLOR
 
     for circle_number in range(game.orbs_needed):
         circle_position = (first_circle_x + circle_number * circle_spacing, circle_y)
@@ -268,261 +270,328 @@ def draw_orb_circles(surface, first_circle_x, circle_y):
         if circle_number < game.orbs_collected:
             pygame.draw.circle(surface, lit_color, circle_position, circle_radius)
         else:
-            pygame.draw.circle(surface, bar_empty_color, circle_position, circle_radius)
-            pygame.draw.circle(surface, panel_line_color, circle_position, circle_radius, 1)
+            pygame.draw.circle(surface, BAR_EMPTY_COLOR, circle_position, circle_radius)
+            pygame.draw.circle(surface, PANEL_LINE_COLOR, circle_position, circle_radius, 1)
 
 
 def draw_top_bar(surface):
-    # The bar at the top: health on the left, wave in the middle, best and score on the right
+    # Josla augšā: veselība pa kreisi, vilnis vidū, labākais un rezultāts pa labi
     bar_height = game.play_area_top
-    pygame.draw.rect(surface, panel_color, (0, 0, screen_width, bar_height))
-    pygame.draw.line(surface, panel_line_color, (0, bar_height - 1), (screen_width, bar_height - 1), 1)
+    pygame.draw.rect(surface, PANEL_COLOR, (0, 0, SCREEN_WIDTH, bar_height))
+    pygame.draw.line(surface, PANEL_LINE_COLOR, (0, bar_height - 1), (SCREEN_WIDTH, bar_height - 1), 1)
 
     label_y = 18
     value_y = 41
 
-    # Health (left). The bar changes color when your health gets low
+    # Veselība (pa kreisi). Josla maina krāsu, kad veselības kļūst maz
     health_fraction = game.player_health / game.player_max_health
 
     if health_fraction > 0.5:
-        health_color = health_good_color
+        health_color = HEALTH_GOOD_COLOR
     elif health_fraction > 0.25:
-        health_color = health_medium_color
+        health_color = HEALTH_MEDIUM_COLOR
     else:
-        health_color = health_low_color
+        health_color = HEALTH_LOW_COLOR
 
-    draw_text(surface, "HEALTH", label_font, dim_text_color, 30, label_y, "left")
+    draw_text(surface, "HEALTH", LABEL_FONT, DIM_TEXT_COLOR, 30, label_y, "left")
     draw_bar(surface, 30, 34, 220, 10, health_fraction, health_color)
 
-    # Wave (middle)
-    draw_text(surface, "WAVE", label_font, dim_text_color, screen_width / 2, label_y)
-    draw_text(surface, str(game.wave_number), value_font, bright_text_color, screen_width / 2, value_y)
+    # Vilnis (vidū)
+    draw_text(surface, "WAVE", LABEL_FONT, DIM_TEXT_COLOR, CENTER_X, label_y)
+    draw_text(surface, str(game.wave_number), VALUE_FONT, BRIGHT_TEXT_COLOR, CENTER_X, value_y)
 
-    # Best score (right, left of the score). It grows along with the score when you beat the record
-    draw_text(surface, "BEST", label_font, dim_text_color, screen_width - 180, label_y, "right")
-    draw_text(surface, str(game.high_score).zfill(6), value_font, dim_text_color, screen_width - 180, value_y, "right")
+    # Labākais rezultāts (pa labi, pa kreisi no rezultāta). Tas aug kopā ar rezultātu, kad pārspēj rekordu
+    best_x = SCREEN_WIDTH - 180
+    draw_text(surface, "BEST", LABEL_FONT, DIM_TEXT_COLOR, best_x, label_y, "right")
+    draw_text(surface, str(game.high_score).zfill(6), VALUE_FONT, DIM_TEXT_COLOR, best_x, value_y, "right")
 
-    # Score (right, always six digits, like 001240)
-    draw_text(surface, "SCORE", label_font, dim_text_color, screen_width - 30, label_y, "right")
-    draw_text(surface, str(game.score).zfill(6), value_font, bright_text_color, screen_width - 30, value_y, "right")
+    # Rezultāts (pa labi, vienmēr seši cipari, piemēram 001240)
+    score_x = SCREEN_WIDTH - 30
+    draw_text(surface, "SCORE", LABEL_FONT, DIM_TEXT_COLOR, score_x, label_y, "right")
+    draw_text(surface, str(game.score).zfill(6), VALUE_FONT, BRIGHT_TEXT_COLOR, score_x, value_y, "right")
 
 
 def draw_bottom_bar(surface):
-    # The bar at the bottom: orbs on the left, dash on the right
+    # Josla apakšā: orbi pa kreisi, izrāviens pa labi
     bar_top = game.play_area_bottom
-    bar_height = screen_height - bar_top
+    bar_height = SCREEN_HEIGHT - bar_top
     center_y = bar_top + bar_height // 2
 
-    pygame.draw.rect(surface, panel_color, (0, bar_top, screen_width, bar_height))
-    pygame.draw.line(surface, panel_line_color, (0, bar_top), (screen_width, bar_top), 1)
+    pygame.draw.rect(surface, PANEL_COLOR, (0, bar_top, SCREEN_WIDTH, bar_height))
+    pygame.draw.line(surface, PANEL_LINE_COLOR, (0, bar_top), (SCREEN_WIDTH, bar_top), 1)
 
-    # Orbs: the 10 circles
-    draw_text(surface, "ORBS", label_font, dim_text_color, 30, center_y, "left")
+    # Orbi: 10 apļi
+    draw_text(surface, "ORBS", LABEL_FONT, DIM_TEXT_COLOR, 30, center_y, "left")
     draw_orb_circles(surface, 92, center_y)
 
-    # When all 10 orbs are collected, show what the keys do
+    # Kad savākti visi 10 orbi, parādām, ko dara taustiņi
     if game.orbs_collected >= game.orbs_needed:
-        draw_text(surface, "E  BOOST      F  GRENADE", label_font, bright_text_color, 310, center_y, "left")
+        draw_text(surface, "E  BOOST      F  GRENADE", LABEL_FONT, BRIGHT_TEXT_COLOR, 310, center_y, "left")
 
-    # Dash: the bar fills up while the dash recharges, and turns bright when it is ready
+    # Izrāviens: josla piepildās, kamēr tas atjaunojas, un kļūst spilgta, kad ir gatavs
     dash_fraction = 1 - game.dash_cooldown_timer / game.dash_cooldown_delay
 
     if game.dash_cooldown_timer == 0:
-        dash_color = dash_ready_color
+        dash_color = DASH_READY_COLOR
     else:
-        dash_color = dash_charging_color
+        dash_color = DASH_CHARGING_COLOR
 
-    draw_text(surface, "DASH", label_font, dim_text_color, 1020, center_y, "left")
+    draw_text(surface, "DASH", LABEL_FONT, DIM_TEXT_COLOR, 1020, center_y, "left")
     draw_bar(surface, 1070, center_y - 4, 180, 8, dash_fraction, dash_color)
 
 
-def draw_playing_screen(surface):
-    # The ground between the two bars
+def draw_game_view(surface):
+    # Zeme starp abām joslām
     ground_height = game.play_area_bottom - game.play_area_top
-    pygame.draw.rect(surface, ground_color, (0, game.play_area_top, screen_width, ground_height))
+    pygame.draw.rect(surface, GROUND_COLOR, (0, game.play_area_top, SCREEN_WIDTH, ground_height))
 
     draw_game_world(surface)
 
-    # The bars are drawn after the world, so zombies walking in from behind them stay hidden
+    # Joslas zīmē pēc pasaules, tāpēc zombiji, kas nāk no aiz tām, paliek paslēpti
     draw_top_bar(surface)
     draw_bottom_bar(surface)
 
 
-def draw_name_screen(surface):
-    draw_text(surface, "ENTER YOUR NAME", wave_font, bright_text_color, screen_width / 2, screen_height / 2 - 170)
+# ---------- Ekrānu zīmēšana ----------
+def draw_menu_screen(surface):
+    draw_text(surface, "DEADFIELD", TITLE_FONT, BRIGHT_TEXT_COLOR, CENTER_X, CENTER_Y - 160)
+    draw_buttons(surface, game.menu_options, MENU_BUTTONS)
 
-    # The box where the name is typed
+
+def draw_name_screen(surface):
+    draw_text(surface, "ENTER YOUR NAME", WAVE_FONT, BRIGHT_TEXT_COLOR, CENTER_X, CENTER_Y - 170)
+
+    # Lodziņš, kurā raksta vārdu
     box_rectangle = pygame.Rect(0, 0, 440, 64)
-    box_rectangle.center = (screen_width / 2, screen_height / 2 - 70)
-    pygame.draw.rect(surface, bar_empty_color, box_rectangle, border_radius=12)
-    pygame.draw.rect(surface, panel_line_color, box_rectangle, 2, border_radius=12)
+    box_rectangle.center = (CENTER_X, CENTER_Y - 70)
+    pygame.draw.rect(surface, BAR_EMPTY_COLOR, box_rectangle, border_radius=12)
+    pygame.draw.rect(surface, PANEL_LINE_COLOR, box_rectangle, 2, border_radius=12)
 
     text_left = box_rectangle.left + 24
     text_center_y = box_rectangle.centery
 
-    # The typed name, or a grey hint while the box is empty
+    # Uzrakstītais vārds vai pelēks mājiens, kamēr lodziņš ir tukšs
     if game.player_name == "":
-        draw_text(surface, "Your name", menu_font, dim_text_color, text_left, text_center_y, "left")
+        draw_text(surface, "Your name", MENU_FONT, DIM_TEXT_COLOR, text_left, text_center_y, "left")
         cursor_x = text_left
     else:
-        draw_text(surface, game.player_name, menu_font, bright_text_color, text_left, text_center_y, "left")
-        cursor_x = text_left + menu_font.size(game.player_name)[0] + 3
+        draw_text(surface, game.player_name, MENU_FONT, BRIGHT_TEXT_COLOR, text_left, text_center_y, "left")
+        cursor_x = text_left + MENU_FONT.size(game.player_name)[0] + 3
 
-    # The cursor blinks: visible for half a second, then hidden for half a second
+    # Kursors mirgo: pusi sekundes redzams, pusi sekundes paslēpts
     if (pygame.time.get_ticks() // 500) % 2 == 0:
-        pygame.draw.line(surface, bright_text_color, (cursor_x, text_center_y - 18), (cursor_x, text_center_y + 18), 2)
+        cursor_top = (cursor_x, text_center_y - 18)
+        cursor_bottom = (cursor_x, text_center_y + 18)
+        pygame.draw.line(surface, BRIGHT_TEXT_COLOR, cursor_top, cursor_bottom, 2)
 
     hint_text = "Letters and numbers, up to " + str(game.max_name_length) + " characters"
-    draw_text(surface, hint_text, label_font, dim_text_color, screen_width / 2, box_rectangle.bottom + 26)
+    draw_text(surface, hint_text, LABEL_FONT, DIM_TEXT_COLOR, CENTER_X, box_rectangle.bottom + 26)
 
-    draw_buttons(surface, game.name_options, name_buttons)
+    draw_buttons(surface, game.name_options, NAME_BUTTONS)
 
 
 def draw_wave_message(surface):
-    # A big message in the middle of the play area during the break between waves
+    # Liela ziņa spēles laukuma vidū pauzes laikā starp viļņiem
     message_y = (game.play_area_top + game.play_area_bottom) / 2 - 120
     wave_text = "WAVE " + str(game.wave_number)
-    draw_text(surface, wave_text, wave_font, bright_text_color, screen_width / 2, message_y)
+    draw_text(surface, wave_text, WAVE_FONT, BRIGHT_TEXT_COLOR, CENTER_X, message_y)
 
 
 def draw_boost_message(surface):
-    # Shows which boost you just got, for about 2 seconds
+    # Parāda, kādu uzlabojumu tikko saņēmi (apmēram 2 sekundes)
     message_y = (game.play_area_top + game.play_area_bottom) / 2 - 50
-    draw_text(surface, boost_texts[game.last_boost], menu_font, orb_color, screen_width / 2, message_y)
+    draw_text(surface, BOOST_TEXTS[game.last_boost], MENU_FONT, ORB_COLOR, CENTER_X, message_y)
 
 
-while game.running:
-    # Which buttons are on the screen right now?
+def draw_playing_screen(surface, mouse_position):
+    draw_game_view(surface)
+
+    # Liels uzraksts "WAVE 2" pauzes laikā starp viļņiem
+    if game.wave_break_timer > 0:
+        draw_wave_message(surface)
+
+    # Ziņa par uzlabojumu, ko tikko saņēmi
+    if game.boost_message_timer > 0:
+        draw_boost_message(surface)
+
+    # Mērķis (zīmē pēdējo, lai tas ir virs visa)
+    draw_crosshair(surface, mouse_position[0], mouse_position[1])
+
+
+def draw_pause_screen(surface):
+    # Sastingusī spēle paliek redzama zem tumša caurspīdīga slāņa
+    draw_game_view(surface)
+    surface.blit(DARK_LAYER, (0, 0))
+
+    draw_text(surface, "PAUSED", TITLE_FONT, BRIGHT_TEXT_COLOR, CENTER_X, CENTER_Y - 160)
+    draw_buttons(surface, game.pause_options, PAUSE_BUTTONS)
+
+
+def draw_send_status(surface):
+    # Maza rindiņa apakšā, kas pasaka, vai rezultāts sasniedza mājaslapu
+    if score_sender.send_status == "sending":
+        status_text = "Saving your score..."
+        status_color = DIM_TEXT_COLOR
+    elif score_sender.send_status == "saved":
+        status_text = "Score saved to the website"
+        status_color = HEALTH_GOOD_COLOR
+    else:
+        status_text = "Could not reach the server, score not saved"
+        status_color = HEALTH_LOW_COLOR
+
+    draw_text(surface, status_text, LABEL_FONT, status_color, CENTER_X, CENTER_Y + 190)
+
+
+def draw_game_over_screen(surface):
+    # Sastingusī spēle paliek redzama zem tumša caurspīdīga slāņa
+    draw_game_view(surface)
+    surface.blit(DARK_LAYER, (0, 0))
+
+    draw_text(surface, "GAME OVER", TITLE_FONT, HEALTH_LOW_COLOR, CENTER_X, CENTER_Y - 190)
+    draw_text(surface, game.player_name, MENU_FONT, DIM_TEXT_COLOR, CENTER_X, CENTER_Y - 132)
+    draw_text(surface, "Score " + str(game.score), MENU_FONT, BRIGHT_TEXT_COLOR, CENTER_X, CENTER_Y - 98)
+    draw_text(surface, "Wave " + str(game.wave_number), MENU_FONT, DIM_TEXT_COLOR, CENTER_X, CENTER_Y - 64)
+
+    # Zeltains uzraksts, ja rekords pārspēts, citādi parādām rekordu
+    if game.is_new_best():
+        draw_text(surface, "NEW BEST!", MENU_FONT, ORB_FULL_COLOR, CENTER_X, CENTER_Y - 30)
+    else:
+        draw_text(surface, "Best " + str(game.high_score), MENU_FONT, DIM_TEXT_COLOR, CENTER_X, CENTER_Y - 30)
+
+    # Game over pogas iedegas sarkanas, nevis baltas
+    draw_buttons(surface, game.game_over_options, GAME_OVER_BUTTONS, HEALTH_LOW_COLOR, BRIGHT_TEXT_COLOR)
+
+    # Parāda, vai rezultāts nonāca mājaslapā
+    draw_send_status(surface)
+
+
+def draw_current_screen(surface, mouse_position):
+    surface.fill(PANEL_COLOR)
+
     if game.state == "menu":
-        active_buttons = menu_buttons
+        draw_menu_screen(surface)
     elif game.state == "enter_name":
-        active_buttons = name_buttons
+        draw_name_screen(surface)
+    elif game.state == "playing":
+        draw_playing_screen(surface, mouse_position)
     elif game.state == "paused":
-        active_buttons = pause_buttons
+        draw_pause_screen(surface)
     elif game.state == "game_over":
-        active_buttons = game_over_buttons
+        draw_game_over_screen(surface)
+
+
+# ---------- Ievade ----------
+def find_hovered_button(mouse_position):
+    # Kuras pogas pašlaik ir uz ekrāna?
+    if game.state == "menu":
+        active_buttons = MENU_BUTTONS
+    elif game.state == "enter_name":
+        active_buttons = NAME_BUTTONS
+    elif game.state == "paused":
+        active_buttons = PAUSE_BUTTONS
+    elif game.state == "game_over":
+        active_buttons = GAME_OVER_BUTTONS
     else:
         active_buttons = []
 
-    # Find which button the mouse is over (None means no button)
-    mouse_position = pygame.mouse.get_pos()
+    # Atrodam, virs kuras pogas ir pele (None nozīmē, ka virs nevienas)
     hovered_button = None
     for option_number in range(len(active_buttons)):
         if active_buttons[option_number].collidepoint(mouse_position):
             hovered_button = option_number
 
-    # Show the normal mouse arrow in the menus, the crosshair while playing
+    return hovered_button
+
+
+def handle_key_press(key, mouse_position):
+    # Esc darbojas vienmēr: pauzē spēli vai atgriež atpakaļ
+    if key == pygame.K_ESCAPE:
+        game.press_escape()
+
+    # Vārda ekrānā: Backspace dzēš burtu, Enter apstiprina vārdu
+    elif game.state == "enter_name":
+        if key == pygame.K_BACKSPACE:
+            game.delete_name_character()
+        elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
+            game.confirm_name()
+
+    # Spēles laikā: atstarpe — izrāviens, E — uzlabojums, F — granāta
+    elif game.state == "playing":
+        if key == pygame.K_SPACE:
+            game.start_dash()
+        elif key == pygame.K_e:
+            game.use_boost()
+        elif key == pygame.K_f:
+            game.throw_grenade(mouse_position[0], mouse_position[1])
+
+
+def handle_event(event, mouse_position, hovered_button):
+    if event.type == pygame.QUIT:
+        game.running = False
+
+    # Rakstītie burti nonāk vārdā (tikai vārda ekrānā)
+    elif event.type == pygame.TEXTINPUT:
+        if game.state == "enter_name":
+            game.add_name_text(event.text)
+
+    elif event.type == pygame.KEYDOWN:
+        handle_key_press(event.key, mouse_position)
+
+    # Kreisais peles klikšķis uz pogas (spēles laikā pogu nav)
+    elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        if game.state != "playing" and hovered_button is not None:
+            game.click_option(hovered_button)
+
+
+def handle_playing_input(mouse_position):
+    # Kustība: WASD taustiņi dod virzienu -1, 0 vai 1 pa x un y
+    pressed_keys = pygame.key.get_pressed()
+    direction_x = 0
+    direction_y = 0
+    if pressed_keys[pygame.K_a]:
+        direction_x = direction_x - 1
+    if pressed_keys[pygame.K_d]:
+        direction_x = direction_x + 1
+    if pressed_keys[pygame.K_w]:
+        direction_y = direction_y - 1
+    if pressed_keys[pygame.K_s]:
+        direction_y = direction_y + 1
+    game.move_player(direction_x, direction_y)
+
+    # Turot kreiso peles pogu, spēle turpina šaut (aizkavi pievieno pati spēle)
+    pressed_mouse_buttons = pygame.mouse.get_pressed()
+    if pressed_mouse_buttons[0]:
+        game.shoot(mouse_position[0], mouse_position[1])
+
+
+# ---------- Galvenais cikls ----------
+while game.running:
+    mouse_position = pygame.mouse.get_pos()
+    hovered_button = find_hovered_button(mouse_position)
+
+    # Izvēlnēs rāda parasto peles bultiņu, spēles laikā — mērķi
     pygame.mouse.set_visible(game.state != "playing")
 
-    # 1. Input
+    # 1. Ievade
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            game.running = False
-        elif event.type == pygame.TEXTINPUT:
-            # Typed letters go into the name (only on the name screen)
-            if game.state == "enter_name":
-                game.add_name_text(event.text)
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE:
-            if game.state == "enter_name":
-                game.delete_name_character()
-        elif event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            if game.state == "enter_name":
-                game.confirm_name()
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            # Esc pauses the game (and continues it), or goes back from the name screen
-            game.press_escape()
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            if game.state == "playing":
-                game.start_dash()
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-            if game.state == "playing":
-                game.use_boost()
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_f:
-            if game.state == "playing":
-                game.throw_grenade(mouse_position[0], mouse_position[1])
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if game.state != "playing" and hovered_button is not None:
-                game.click_option(hovered_button)
+        handle_event(event, mouse_position, hovered_button)
 
+    # 2. Atjaunināšana
     if game.state == "playing":
-        pressed_keys = pygame.key.get_pressed()
-        direction_x = 0
-        direction_y = 0
-        if pressed_keys[pygame.K_a]:
-            direction_x = direction_x - 1
-        if pressed_keys[pygame.K_d]:
-            direction_x = direction_x + 1
-        if pressed_keys[pygame.K_w]:
-            direction_y = direction_y - 1
-        if pressed_keys[pygame.K_s]:
-            direction_y = direction_y + 1
-        game.move_player(direction_x, direction_y)
-
-        # Holding the left mouse button keeps shooting (the game adds the delay)
-        pressed_mouse_buttons = pygame.mouse.get_pressed()
-        if pressed_mouse_buttons[0]:
-            game.shoot(mouse_position[0], mouse_position[1])
-
-    # 2. Events
-    if game.state == "playing":
+        handle_playing_input(mouse_position)
         game.update_game()
+
+        # Spēlētājs tikko gāja bojā, tāpēc rezultātu nosūta serverim (mājaslapa to parāda)
+        if game.state == "game_over":
+            score_sender.send_score(game.player_name, game.score)
     else:
         game.hover_option(hovered_button)
 
-    # 3. Drawing
-    screen.fill(panel_color)
-
-    if game.state == "menu":
-        draw_text(screen, "DEADFIELD", title_font, bright_text_color, screen_width / 2, screen_height / 2 - 160)
-        draw_buttons(screen, game.menu_options, menu_buttons)
-
-    elif game.state == "enter_name":
-        draw_name_screen(screen)
-
-    elif game.state == "playing":
-        draw_playing_screen(screen)
-
-        # Big "WAVE 2" message while the break between waves is running
-        if game.wave_break_timer > 0:
-            draw_wave_message(screen)
-
-        # Message about the boost you just got
-        if game.boost_message_timer > 0:
-            draw_boost_message(screen)
-
-        # Crosshair (drawn last so it is on top of everything)
-        draw_crosshair(screen, mouse_position[0], mouse_position[1])
-
-    elif game.state == "paused":
-        # The frozen game stays visible behind a dark see-through layer
-        draw_playing_screen(screen)
-        screen.blit(dark_layer, (0, 0))
-
-        draw_text(screen, "PAUSED", title_font, bright_text_color, screen_width / 2, screen_height / 2 - 160)
-        draw_buttons(screen, game.pause_options, pause_buttons)
-
-    elif game.state == "game_over":
-        # The frozen game stays visible behind a dark see-through layer
-        draw_playing_screen(screen)
-        screen.blit(dark_layer, (0, 0))
-
-        draw_text(screen, "GAME OVER", title_font, health_low_color, screen_width / 2, screen_height / 2 - 190)
-        draw_text(screen, game.player_name, menu_font, dim_text_color, screen_width / 2, screen_height / 2 - 132)
-        draw_text(screen, "Score " + str(game.score), menu_font, bright_text_color, screen_width / 2, screen_height / 2 - 98)
-        draw_text(screen, "Wave " + str(game.wave_number), menu_font, dim_text_color, screen_width / 2, screen_height / 2 - 64)
-
-        # Gold message if the record was beaten, otherwise show the record
-        if game.is_new_best():
-            draw_text(screen, "NEW BEST!", menu_font, orb_full_color, screen_width / 2, screen_height / 2 - 30)
-        else:
-            draw_text(screen, "Best " + str(game.high_score), menu_font, dim_text_color, screen_width / 2, screen_height / 2 - 30)
-
-        # The game over buttons light up red instead of white
-        draw_buttons(screen, game.game_over_options, game_over_buttons, health_low_color, bright_text_color)
-
+    # 3. Zīmēšana
+    draw_current_screen(screen, mouse_position)
     pygame.display.flip()
 
-    # 4. Pause (keeps the game at 60 frames per second)
+    # 4. Pauze (spēle darbojas ar 60 kadriem sekundē)
     clock.tick(60)
 
 pygame.quit()

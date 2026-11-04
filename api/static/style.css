@@ -1,0 +1,67 @@
+/* Vispārīgais izskats */
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #181d20;
+    color: #e8ecec;
+    line-height: 1.6;
+}
+
+a {
+    color: #aa5aff;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Galvene ar nosaukumu un izvēlni */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 32px;
+    background: #0f1315;
+}
+
+.logo {
+    color: #e8ecec;
+    font-size: 22px;
+    letter-spacing: 4px;
+}
+
+nav a {
+    margin-left: 20px;
+}
+
+/* Lapas saturs */
+main {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 32px 24px;
+}
+
+/* Tabulas */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #2e3638;
+}
+
+th {
+    color: #7d8a8c;
+}
+
+/* Kājene */
+footer {
+    padding: 24px;
+    text-align: center;
+    color: #7d8a8c;
+}

@@ -1,0 +1,6 @@
+*.db
+.venv/
+__pycache__/
+.DS_Store
+highscore.txt
+player_name.txt

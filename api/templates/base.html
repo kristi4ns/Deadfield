@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="utf-8">
+    <title>{{ title }} - Deadfield</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    {# Galvene ar izvēlni ir vienāda visās lapās #}
+    <header>
+        <a class="logo" href="/">DEADFIELD</a>
+        <nav>
+            <a href="/">Līderu tabula</a>
+            <a href="/about">Par spēli</a>
+        </nav>
+    </header>
+
+    <main>
+
+        {# 1. lapa: līderu tabula (top-10) #}
+        {% if page == "leaderboard" %}
+
+        <h1>Līderu tabula (top-10)</h1>
+
+        {% if scores %}
+        <table>
+            <tr>
+                <th>#</th>
+                <th>Spēlētājs</th>
+                <th>Punkti</th>
+            </tr>
+            {% for score in scores %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><a href="/players/{{ score.name|urlencode }}">{{ score.name }}</a></td>
+                <td>{{ score.points }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <p>Vēl nav neviena rezultāta.</p>
+        {% endif %}
+
+        {# 2. lapa: spēlētāja profils ar statistiku #}
+        {% elif page == "player" %}
+
+        <h1>{{ stats.name }}</h1>
+
+        <table>
+            <tr>
+                <th>Spēles</th>
+                <td>{{ stats.games }}</td>
+            </tr>
+            <tr>
+                <th>Labākais rezultāts</th>
+                <td>{{ stats.best_score }}</td>
+            </tr>
+        </table>
+
+        <p><a href="/">← Atpakaļ uz līderu tabulu</a></p>
+
+        {# 3. lapa: spēles apraksts un noteikumi #}
+        {% elif page == "about" %}
+
+        <h1>Par spēli</h1>
+
+        <p>
+            Deadfield ir 2D zombiju šaujamspēle. Tu esi viens uz lauka, un no visām pusēm
+            nāk zombiji. Tavs mērķis ir izdzīvot pēc iespējas ilgāk un savākt pēc iespējas
+            vairāk punktu.
+        </p>
+
+        <h2>Noteikumi</h2>
+        <ul>
+            <li>W A S D — kustēties, pele — mērķēt, kreisā poga — šaut.</li>
+            <li>Atstarpe — ātrs izrāviens (atjaunojas apmēram 7 sekundēs).</li>
+            <li>Zombiji nāk viļņos. Katrs vilnis ir grūtāks, un viļņi ir bezgalīgi.</li>
+            <li>Savāc 10 orbus: E dod nejaušu uzlabojumu, F met granātu.</li>
+            <li>Katrs zombija pieskāriens atņem 10 dzīvības. Kad dzīvības beidzas, spēle ir galā.</li>
+            <li>Punkti: zombijs +10, orbs +5, pabeigts vilnis +100.</li>
+            <li>Pirms spēles ievadi vārdu. Kad spēle beidzas, rezultāts nonāk līderu tabulā.</li>
+        </ul>
+
+        {% endif %}
+
+    </main>
+
+    <footer>Deadfield · skolas projekts</footer>
+</body>
+</html>
